@@ -1,6 +1,7 @@
 package com.harjot.firestoreintegration
 
 import android.app.Dialog
+import android.content.ContentValues
 import android.content.ContentValues.TAG
 import android.content.Intent
 import android.os.Bundle
@@ -13,11 +14,18 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.QueryDocumentSnapshot
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import com.harjot.firestoreintegration.databinding.ActivityMainBinding
 import com.harjot.firestoreintegration.databinding.DialogLayoutBinding
 
 class MainActivity : AppCompatActivity(), RecyclerInterface {
+    private var collectionName = "Users"
+    private var database = Firebase.firestore
     lateinit var binding: ActivityMainBinding
+    var userModel = Model()
     var arrayList = ArrayList<Model>()
     var recyclerAdapater = RecyclerAdapater(arrayList,this)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,7 +42,46 @@ class MainActivity : AppCompatActivity(), RecyclerInterface {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
-
+        arrayList.clear()
+        database.collection(collectionName)
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    return@addSnapshotListener
+                }
+                for (snapshot in snapshots!!.documentChanges) {
+                    when (snapshot.type) {
+                        DocumentChange.Type.ADDED -> {
+                            val userModel = convertObject( snapshot.document)
+                            userModel?.id = snapshot.document.id
+                            userModel?.let { arrayList.add(it) }
+                            Log.e(ContentValues.TAG, "userModelList ${arrayList.size}")
+                            recyclerAdapater.notifyDataSetChanged()
+                        }
+                        DocumentChange.Type.MODIFIED -> {
+                            val userModel = convertObject( snapshot.document)
+                            userModel?.id = snapshot.document.id
+                            userModel?.let {
+                                var index = getIndex(userModel)
+                                if (index > -1) {
+                                    arrayList.set(index, it)
+                                    recyclerAdapater.notifyItemChanged(index)
+                                }
+                            }
+                        }
+                        DocumentChange.Type.REMOVED -> {
+                            val userModel = convertObject( snapshot.document)
+                            userModel?.id = snapshot.document.id
+                            userModel?.let {
+                                var index = getIndex(userModel)
+                                if (index > -1) {
+                                    arrayList.removeAt(index)
+                                    recyclerAdapater.notifyItemRemoved(index)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         binding.fabAdd.setOnClickListener {
             dialog()
         }
@@ -68,8 +115,10 @@ class MainActivity : AppCompatActivity(), RecyclerInterface {
                     "The item is  deleted",
                     Toast.LENGTH_SHORT
                 ).show()
-                arrayList.removeAt(position)
-                recyclerAdapater.notifyDataSetChanged()
+                database.collection(collectionName)
+                    .document(arrayList[position].id ?: "").delete()
+//                arrayList.removeAt(position)
+//                recyclerAdapater.notifyDataSetChanged()
             }
         }
         alertDialog.show()
@@ -101,20 +150,43 @@ class MainActivity : AppCompatActivity(), RecyclerInterface {
                     dialogBinding.etPhoneNo.error = "Enter PhoneNo"
                 }else{
                     if (position > -1){
-                        arrayList[position] = Model(
-                            "",
-                            name =  dialogBinding.etName.text.toString(),
-                            email = dialogBinding.etEmail.text.toString(),
-                            phoneNo = dialogBinding.etPhoneNo.text.toString(),
-                        )
-                    }else{
-                        Log.e(TAG, "dialog: fabbutton", )
-                        arrayList.add(Model(
-                            "",
+//                        arrayList[position] = Model(
+//                            "",
+//                            name =  dialogBinding.etName.text.toString(),
+//                            email = dialogBinding.etEmail.text.toString(),
+//                            phoneNo = dialogBinding.etPhoneNo.text.toString(),
+//                        )
+//                        arrayList[position].name = dialogBinding.etName.text.toString()
+//                        arrayList[position].email = dialogBinding.etEmail.text.toString()
+//                        arrayList[position].phoneNo = dialogBinding.etPhoneNo.text.toString()
+                        val userModel = Model(
+                            id = arrayList[position].id,
                             name = dialogBinding.etName.text.toString(),
                             email = dialogBinding.etEmail.text.toString(),
-                            phoneNo = dialogBinding.etPhoneNo.text.toString())
+                            phoneNo = dialogBinding.etPhoneNo.text.toString()
                         )
+                        database.collection(collectionName).document(arrayList[position].id?:"").set(userModel)
+                            .addOnSuccessListener {
+
+                            }
+                            .addOnFailureListener {  }
+                    }else{
+                        Log.e(TAG, "dialog: fabbutton", )
+//                        arrayList.add(Model(
+//                            "",
+//                            name = dialogBinding.etName.text.toString(),
+//                            email = dialogBinding.etEmail.text.toString(),
+//                            phoneNo = dialogBinding.etPhoneNo.text.toString())
+//                        )
+                        database.collection(collectionName).add(
+                            Model(
+                                id = "",
+                                name = dialogBinding.etName.text.toString(),
+                                email = dialogBinding.etEmail.text.toString(),
+                                phoneNo = dialogBinding.etPhoneNo.text.toString()
+                            )
+                        )
+
                     }
                     dismiss()
                     recyclerAdapater.notifyDataSetChanged()
@@ -122,5 +194,18 @@ class MainActivity : AppCompatActivity(), RecyclerInterface {
             }
             show()
         }
+    }
+    fun convertObject(snapshot: QueryDocumentSnapshot) : Model?{
+        val userModel: Model? =
+            snapshot.toObject(Model::class.java)
+        userModel?.id = snapshot.id ?: ""
+        return userModel
+    }
+    fun getIndex(userModel: Model) : Int{
+        var index = -1
+        index = arrayList.indexOfFirst { element ->
+            element.id?.equals(userModel.id) == true
+        }
+        return index
     }
 }
