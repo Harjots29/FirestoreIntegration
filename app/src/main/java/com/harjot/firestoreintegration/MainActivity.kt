@@ -49,38 +49,32 @@ class MainActivity : AppCompatActivity(), RecyclerInterface {
                     return@addSnapshotListener
                 }
                 for (snapshot in snapshots!!.documentChanges) {
+                    val userModel = convertObject(snapshot.document)
+
                     when (snapshot.type) {
                         DocumentChange.Type.ADDED -> {
-                            val userModel = convertObject( snapshot.document)
-                            userModel?.id = snapshot.document.id
                             userModel?.let { arrayList.add(it) }
                             Log.e(ContentValues.TAG, "userModelList ${arrayList.size}")
-                            recyclerAdapater.notifyDataSetChanged()
                         }
                         DocumentChange.Type.MODIFIED -> {
-                            val userModel = convertObject( snapshot.document)
-                            userModel?.id = snapshot.document.id
                             userModel?.let {
                                 var index = getIndex(userModel)
                                 if (index > -1) {
                                     arrayList.set(index, it)
-                                    recyclerAdapater.notifyItemChanged(index)
                                 }
                             }
                         }
                         DocumentChange.Type.REMOVED -> {
-                            val userModel = convertObject( snapshot.document)
-                            userModel?.id = snapshot.document.id
                             userModel?.let {
                                 var index = getIndex(userModel)
                                 if (index > -1) {
                                     arrayList.removeAt(index)
-                                    recyclerAdapater.notifyItemRemoved(index)
                                 }
                             }
                         }
                     }
                 }
+                recyclerAdapater.notifyDataSetChanged()
             }
         binding.fabAdd.setOnClickListener {
             dialog()
@@ -94,10 +88,12 @@ class MainActivity : AppCompatActivity(), RecyclerInterface {
     }
 
     override fun onEditClick(position: Int) {
+        Toast.makeText(this, "$position ", Toast.LENGTH_SHORT).show()
         dialog(position)
     }
 
     override fun onDeleteClick(position: Int) {
+        Toast.makeText(this, "$position", Toast.LENGTH_SHORT).show()
         var alertDialog = AlertDialog.Builder(this)
         alertDialog.setTitle("Delete Item")
         alertDialog.setMessage("Do you want to delete the item?")
@@ -171,22 +167,20 @@ class MainActivity : AppCompatActivity(), RecyclerInterface {
                             }
                             .addOnFailureListener {  }
                     }else{
-                        Log.e(TAG, "dialog: fabbutton", )
-//                        arrayList.add(Model(
-//                            "",
-//                            name = dialogBinding.etName.text.toString(),
-//                            email = dialogBinding.etEmail.text.toString(),
-//                            phoneNo = dialogBinding.etPhoneNo.text.toString())
-//                        )
+                        Toast.makeText(this@MainActivity, "$position", Toast.LENGTH_SHORT).show()
                         database.collection(collectionName).add(
                             Model(
-                                id = "",
                                 name = dialogBinding.etName.text.toString(),
                                 email = dialogBinding.etEmail.text.toString(),
                                 phoneNo = dialogBinding.etPhoneNo.text.toString()
                             )
-                        )
+                        ).addOnSuccessListener {
+                            Toast.makeText(this@MainActivity, "success", Toast.LENGTH_SHORT).show()
+                        }
+                            .addOnFailureListener {
+                                Toast.makeText(this@MainActivity, "failure", Toast.LENGTH_SHORT).show()
 
+                            }
                     }
                     dismiss()
                     recyclerAdapater.notifyDataSetChanged()
@@ -196,9 +190,9 @@ class MainActivity : AppCompatActivity(), RecyclerInterface {
         }
     }
     fun convertObject(snapshot: QueryDocumentSnapshot) : Model?{
-        val userModel: Model? =
+        val userModel: Model =
             snapshot.toObject(Model::class.java)
-        userModel?.id = snapshot.id ?: ""
+        userModel.id = snapshot.id ?: ""
         return userModel
     }
     fun getIndex(userModel: Model) : Int{
